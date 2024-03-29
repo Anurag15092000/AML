@@ -1,12 +1,14 @@
 import score
 import numpy
 import os
+import random
 import requests
 import subprocess
 import time
 import unittest
 import joblib
 import pytest
+import pandas as pd
 from score import score
 
 import warnings
@@ -63,3 +65,32 @@ def test_ham():
     label,prop=score(txt,best_model,threshold)
     assert label == 0
 
+class TestDocker(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Build the Docker image
+        subprocess.run(["docker", "build", "-t", "assignment_4", "."], check=True)
+        # Run the Docker container
+        cls.container_id = subprocess.check_output(
+            ["docker", "run", "-d", "-p", "5000:80", "assignment_4"]
+        ).decode("utf-8").strip()
+        # Load input texts from the CSV file
+        cls.test_df = pd.read_csv(r'/workspaces/AML/test_dataset.csv')
+        time.sleep(5)  # Wait for the server to start
+
+    def test_docker(self):
+        r = random.randint(0, len(self.test_df) - 1)
+        text = self.test_df.iat[r, 0]
+        # Test the /score endpoint
+        test_data = {'text': text}
+        response = requests.post('http://127.0.0.1:5000/score', json=test_data)
+        self.assertEqual(response.status_code, 200)
+        # You may want to add more assertions here based on your expected response
+
+    @classmethod
+    def tearDownClass(cls):
+        # Stop and remove the Docker container
+        subprocess.run(["docker", "stop", cls.container_id], check=True)
+        subprocess.run(["docker", "rm", cls.container_id], check=True)        
+if __name__ == '__main__':
+    unittest.main()
